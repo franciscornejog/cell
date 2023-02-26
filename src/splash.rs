@@ -1,5 +1,10 @@
 use bevy::prelude::*;
 use crate::AppState;
+use crate::ui::{
+    get_button_bundle,
+    get_text_bundle,
+    get_node_bundle,
+    despawn_screen};
 
 pub struct SplashPlugin;
 
@@ -19,42 +24,12 @@ impl Plugin for SplashPlugin {
 struct Splash;
 
 fn spawn_screen(mut commands: Commands, asset_server: Res<AssetServer>) {
-    commands.spawn((NodeBundle {
-        style: Style {
-            flex_direction: FlexDirection::Column,
-            justify_content: JustifyContent::SpaceEvenly,
-            align_items: AlignItems::Center, 
-            size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
-            ..default()
-        },
-        ..default()
-    }, Splash))
-    .with_children(|parent| {
-            parent.spawn(TextBundle::from_section(
-                "C E L L", TextStyle {
-                    color: Color::WHITE,
-                    font: asset_server.load("fonts/JetBrainsMonoNL-Regular.ttf"),
-                    font_size: 60.0,
-                })
-            );
-            parent.spawn(ButtonBundle {
-                style: Style {
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
-                    size: Size::new(Val::Px(150.0), Val::Px(65.0)),
-                    ..default()
-                },
-                background_color: Color::DARK_GRAY.into(),
-                ..default()
-            })
-            .with_children(|parent| {
-                parent.spawn(TextBundle::from_section(
-                    "Play", TextStyle {
-                        color: Color::WHITE,
-                        font: asset_server.load("fonts/JetBrainsMonoNL-Regular.ttf"),
-                        font_size: 40.0,
-                    },
-                ));
+    commands.spawn((get_node_bundle(), Splash))
+        .with_children(|parent| {
+            parent.spawn(get_text_bundle(Color::WHITE, 60.0, "C E L L", &asset_server));
+            parent.spawn(get_button_bundle(Color::DARK_GRAY))
+                .with_children(|parent| {
+                parent.spawn(get_text_bundle(Color::WHITE, 40.0, "Play", &asset_server));
             });
         });
 }
@@ -70,11 +45,5 @@ fn interact_button(
             Interaction::Hovered => { *color = Color::ORANGE_RED.into(); }
             Interaction::None => { *color = Color::DARK_GRAY.into(); }
         }
-    }
-}
-
-fn despawn_screen<T: Component>(mut commands: Commands, query: Query<Entity, With<T>>) {
-    for entity in &query {
-        commands.entity(entity).despawn_recursive();
     }
 }

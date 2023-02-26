@@ -25,4 +25,6 @@ Stretch Goals
 3. Add barriers (membrane vs cell wall)
 4. Add score system
 5. Create more levels
+6. Particles can bounce off walls
+7. Create walls
 

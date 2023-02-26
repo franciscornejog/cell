@@ -5,15 +5,17 @@ use bevy::{
 const SCREEN_HEIGHT: f32 = 500.0;
 const SCREEN_WIDTH: f32 = 500.0;
 
-mod cell;
 mod components;
 mod events;
+mod ui;
 mod game;
 mod splash;
+mod menu;
 
 use components::MainCamera;
 use splash::SplashPlugin;
 use game::GamePlugin;
+use menu::MenuPlugin;
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
 enum AppState {
@@ -38,11 +40,11 @@ fn main() {
         .add_state(AppState::Splash)
         .add_plugin(SplashPlugin)
         .add_plugin(GamePlugin)
+        .add_plugin(MenuPlugin)
         .add_system(close_on_esc)
         .run();
 }
 
-pub fn spawn_camera(mut commands: Commands) {
+fn spawn_camera(mut commands: Commands) {
     commands.spawn((Camera2dBundle::default(), MainCamera));
 }
-
