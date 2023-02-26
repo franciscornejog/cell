@@ -1,17 +1,27 @@
-use bevy::{prelude::*, sprite::MaterialMesh2dBundle, window::close_on_esc};
-use rand::prelude::random;
-use bevy::time::FixedTimestep;
+use bevy::{
+    prelude::*, 
+    time::FixedTimestep,
+    sprite::MaterialMesh2dBundle, 
+    window::close_on_esc};
+// use rand::prelude::random;
 
 const SCREEN_HEIGHT: f32 = 500.0;
 const SCREEN_WIDTH: f32 = 500.0;
 
 #[derive(Component)]
+struct MainCamera;
+
+#[derive(Component)]
 struct Player;
 
 #[derive(Component)]
-struct Particle;
+struct Particle {
+    velocity: Vec3,
+}
 
-struct ShootEvent;
+struct ShootEvent {
+    cursor_position: Vec2,
+}
 
 fn main() {
     App::new()
@@ -31,16 +41,16 @@ fn main() {
         .add_system_set(
             SystemSet::new()
                 .with_run_criteria(FixedTimestep::step(0.150))
-                .with_system(move_player)
-                .with_system(shoot_particle)
-                .with_system(spawn_particle.after(shoot_particle)))
+                .with_system(move_player))
+        .add_system(shoot_particle)
+        .add_system(spawn_particle.after(shoot_particle))
         .add_system(move_particle)
         .add_system(close_on_esc)
         .run();
 }
 
 fn spawn_camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((Camera2dBundle::default(), MainCamera));
 }
 
 fn spawn_player(mut commands: Commands) {
@@ -79,26 +89,41 @@ fn spawn_particle(
     mut shoot_reader: EventReader<ShootEvent>,
     positions: Query<&Transform, With<Player>>,
 ) {
-    if shoot_reader.iter().next().is_some() {
+    if let Some(reader) = shoot_reader.iter().next() {
         let position = positions.single();
+        let x = reader.cursor_position.x - position.translation.x;
+        let y = reader.cursor_position.y - position.translation.y;
+        let velocity = Vec3::new(x, y, 0.0).normalize();
         commands.spawn(MaterialMesh2dBundle {
             mesh: meshes.add(shape::Circle::new(5.0).into()).into(),
             material: materials.add(ColorMaterial::from(Color::WHITE)),
             transform: Transform::from_translation(position.translation),
             ..default()
-        }).insert(Particle);
+        }).insert(Particle { velocity });
     }
 }
 
-fn move_particle(mut particles: Query<&mut Transform, With<Particle>>) {
-    for mut transform in particles.iter_mut() {
-        transform.translation.x += 1.0;
+fn move_particle(mut particles: Query<(&mut Transform, &Particle)>) {
+    for (mut transform, particle) in particles.iter_mut() {
+        transform.translation += particle.velocity;
     }
 }
 
-fn shoot_particle(key: Res<Input<KeyCode>>, mut shoot_writer: EventWriter<ShootEvent>) {
-    if key.pressed(KeyCode::Space) {
-        shoot_writer.send(ShootEvent); 
+fn shoot_particle(
+    key: Res<Input<KeyCode>>, 
+    windows: Res<Windows>,
+    mut shoot_writer: EventWriter<ShootEvent>,
+    camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+) {
+    if key.just_pressed(KeyCode::Space) {
+        let (camera, transform) = camera.single();
+        let window = windows.get_primary().unwrap();
+        if let Some(position) = window.cursor_position() 
+            .and_then(|cursor| camera.viewport_to_world(transform, cursor))
+            .map(|ray| ray.origin.truncate())
+        {
+            shoot_writer.send(ShootEvent { cursor_position: position }); 
+        }
     }
 }
 
