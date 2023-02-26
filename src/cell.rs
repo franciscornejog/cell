@@ -1,4 +1,4 @@
-use crate::{SCREEN_WIDTH, SCREEN_HEIGHT};
+use crate::{SCREEN_WIDTH, SCREEN_HEIGHT, AppState};
 use crate::events::ShootEvent;
 use crate::components::{MainCamera, Cell, Player, Enemy, Particle};
 use bevy::{
@@ -8,12 +8,8 @@ use rand::prelude::random;
 
 const CELL_SIZE: f32 = 20.0;
 
-pub fn spawn_camera(mut commands: Commands) {
-    commands.spawn((Camera2dBundle::default(), MainCamera));
-}
-
 pub fn spawn_player(mut commands: Commands, query: Query<&Transform, With<Cell>>) {
-    commands.spawn(spawn_cell(Color::RED, query))
+    commands.spawn(spawn_cell(Color::ORANGE_RED, query))
         .insert(Player);
 }
 

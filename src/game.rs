@@ -1,9 +1,10 @@
 use bevy::{
     prelude::*, 
     time::FixedTimestep};
+use crate::AppState;
 use crate::events::ShootEvent;
 use crate::cell::{
-    spawn_camera, spawn_player, spawn_enemy, spawn_particle,
+    spawn_player, spawn_enemy, spawn_particle,
     despawn_cell, move_player, move_particle, shoot_particle,
 };
 
@@ -13,16 +14,16 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app
         .add_event::<ShootEvent>()
-        .add_startup_system(spawn_camera)
-        .add_startup_system(spawn_player)
-        .add_startup_system(spawn_enemy)
-        .add_system_set(
-            SystemSet::new()
-                .with_run_criteria(FixedTimestep::step(0.150))
-                .with_system(move_player))
-        .add_system(shoot_particle)
-        .add_system(spawn_particle.after(shoot_particle))
-        .add_system(move_particle)
-        .add_system(despawn_cell);
+        .add_system_set(SystemSet::on_enter(AppState::Game)
+            .with_system(spawn_player)
+            .with_system(spawn_enemy))
+        .add_system_set(SystemSet::on_update(AppState::Game)
+            .with_system(shoot_particle)
+            .with_system(spawn_particle.after(shoot_particle))
+            .with_system(move_particle)
+            .with_system(despawn_cell))
+        .add_system_set(SystemSet::on_update(AppState::Game)
+            .with_run_criteria(FixedTimestep::step(0.150))
+            .with_system(move_player));
     }
 }
