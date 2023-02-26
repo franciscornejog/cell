@@ -142,13 +142,13 @@ fn spawn_particle(
         let velocity = Vec3::new(x, y, 1.0).normalize();
         let particle_translation = translation + CELL_SIZE * velocity;
         let particle_size = 5.0;
-        commands.spawn((MaterialMesh2dBundle {
+        commands.spawn(MaterialMesh2dBundle {
             mesh: meshes.add(shape::Circle::default().into()).into(),
             material: materials.add(ColorMaterial::from(Color::WHITE)),
             transform: Transform::from_scale(Vec3::new(particle_size, particle_size, 1.0))
                 .with_translation(particle_translation),
-            ..default()
-        }, Particle { velocity }));
+            ..default() })
+        .insert(Particle { velocity });
     }
 }
 
