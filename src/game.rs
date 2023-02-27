@@ -1,10 +1,9 @@
 use bevy::{
     prelude::*, 
-    sprite::{collide_aabb::collide, MaterialMesh2dBundle},
-    time::FixedTimestep};
+    sprite::{collide_aabb::collide, MaterialMesh2dBundle}};
 use crate::{SCREEN_WIDTH, SCREEN_HEIGHT, AppState};
-use crate::components::{MainCamera, Cell, Player, Enemy, Particle};
-use crate::events::ShootEvent;
+use crate::components::{MainCamera, Cell, Player, Enemy, Explosion, Virus, Particle};
+use crate::events::{DropVirusEvent, ShootEvent, ExplodeEvent, CollisionEvent};
 use crate::ui::despawn_screen;
 use rand::prelude::random;
 
@@ -19,47 +18,99 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app
         .insert_resource(GameMessage("Paused".to_string()))
+        .add_event::<DropVirusEvent>()
         .add_event::<ShootEvent>()
+        .add_event::<ExplodeEvent>()
+        .add_event::<CollisionEvent>()
         .add_system_set(SystemSet::on_enter(AppState::Game)
             .with_system(spawn_player)
             .with_system(spawn_enemy))
         .add_system_set(SystemSet::on_update(AppState::Game)
-            .with_system(shoot_particle)
-            .with_system(spawn_particle.after(shoot_particle))
+            .with_system(input_particle)
+            .with_system(input_virus)
+            .with_system(move_player)
             .with_system(move_particle)
-            .with_system(despawn_cell))
-        .add_system_set(SystemSet::on_update(AppState::Game)
-            .with_run_criteria(FixedTimestep::step(0.150))
-            .with_system(move_player))
+            .with_system(spawn_particle.after(input_particle))
+            .with_system(spawn_virus.after(input_virus))
+            .with_system(spawn_explosion.after(despawn_virus))
+            .with_system(despawn_virus)
+            .with_system(despawn_explosion) 
+            .with_system(despawn_cell) 
+            .with_system(collide_particle)
+            .with_system(collide_explosion))
         .add_system_set(SystemSet::on_exit(AppState::Game)
             .with_system(despawn_screen::<Cell>)
-            .with_system(despawn_screen::<Particle>));
+            .with_system(despawn_screen::<Particle>)
+            .with_system(despawn_screen::<Virus>)
+            .with_system(despawn_screen::<Explosion>));
     }
 }
 
 fn spawn_player(mut commands: Commands, query: Query<&Transform, With<Cell>>) {
-    commands.spawn(spawn_cell(Color::ORANGE_RED, query))
+    let translation = get_random_translation(query);
+    commands.spawn(get_square(Color::ORANGE_RED, CELL_SIZE, translation))
+        .insert(Cell)
         .insert(Player);
 }
 
 fn spawn_enemy(mut commands: Commands, query: Query<&Transform, With<Cell>>) {
-    commands.spawn(spawn_cell(Color::FUCHSIA, query))
+    let translation = get_random_translation(query);
+    commands.spawn(get_square(Color::FUCHSIA, CELL_SIZE, translation))
+        .insert(Cell)
         .insert(Enemy);
 }
 
-fn spawn_cell(color: Color, query: Query<&Transform, With<Cell>>) -> (SpriteBundle, Cell) {
-    (SpriteBundle {
+fn spawn_virus(mut commands: Commands, mut reader: EventReader<DropVirusEvent>) {
+    if let Some(reader) = reader.iter().next() {
+        commands.spawn(get_square(Color::VIOLET, CELL_SIZE / 2.0, reader.translation))
+            .insert(Virus(Timer::from_seconds(5.0, TimerMode::Once)));
+    }
+}
+
+fn spawn_particle(
+    mut commands: Commands, 
+    meshes: ResMut<Assets<Mesh>>, 
+    materials: ResMut<Assets<ColorMaterial>>,
+    mut reader: EventReader<ShootEvent>,
+    query: Query<&Transform, With<Player>>,
+) {
+    if let Some(reader) = reader.iter().next() {
+        let translation = query.single().translation; 
+        let x = reader.cursor_position.x - translation.x;
+        let y = reader.cursor_position.y - translation.y;
+        let velocity = Vec3::new(x, y, 1.0).normalize();
+        let particle_translation = translation + CELL_SIZE * velocity;
+        let radius = 5.0;
+        let circle = get_circle(meshes, materials, Color::WHITE, particle_translation, radius);
+        commands.spawn(circle).insert(Particle { velocity: velocity * 300.0 });
+    }
+}
+
+fn spawn_explosion(
+    mut commands: Commands,
+    meshes: ResMut<Assets<Mesh>>,
+    materials: ResMut<Assets<ColorMaterial>>,
+    mut explode_reader: EventReader<ExplodeEvent>,
+) {
+    if let Some(reader) = explode_reader.iter().next() {
+        let circle = get_circle(meshes, materials, Color::RED, reader.translation, 100.0);
+        commands.spawn(circle).insert(Explosion(Timer::from_seconds(1.0, TimerMode::Once)));
+    }
+}
+
+fn get_square(color: Color, size: f32, translation: Vec3) -> SpriteBundle {
+    SpriteBundle {
         sprite: Sprite {
             color,
             ..default()
         },
-        transform: Transform::from_scale(Vec3::new(CELL_SIZE, CELL_SIZE, 1.0))
-            .with_translation(get_translation(query)),
+        transform: Transform::from_scale(Vec3::new(size, size, 1.0))
+            .with_translation(translation),
         ..default()
-    }, Cell)
+    }
 }
 
-fn get_translation(query: Query<&Transform, With<Cell>>) -> Vec3 {
+fn get_random_translation(query: Query<&Transform, With<Cell>>) -> Vec3 {
     let mut width = get_random_position(SCREEN_WIDTH);
     let mut height = get_random_position(SCREEN_HEIGHT);
     for transform in query.iter() {
@@ -81,37 +132,33 @@ fn get_random_position(size: f32) -> f32 {
     (random::<f32>() * (size - CELL_SIZE)) - (size / 2.0 - (CELL_SIZE / 2.0))
 }
 
-fn despawn_cell(
-    mut commands: Commands, 
-    mut state: ResMut<State<AppState>>,
-    mut message: ResMut<GameMessage>,
-    particle_query: Query<&Transform,  With<Particle>>,
-    cell_query: Query<(Entity, &Transform, Option<&Player>), With<Cell>>,
-) {
-    for particle_transform in particle_query.iter() {
-        for (cell, cell_transform, player) in cell_query.iter() {
-            let collision = collide(
-                particle_transform.translation,
-                particle_transform.scale.truncate(),
-                cell_transform.translation,
-                cell_transform.scale.truncate(),
-            );
-            if collision.is_some() {
-                if player.is_some() {
-                    state.set(AppState::Menu).unwrap(); 
-                    message.0 = "Game Over".to_string();
-                } else {
-                    state.set(AppState::Menu).unwrap(); 
-                    message.0 = "Victory".to_string();
-                }
-                commands.entity(cell).despawn();
-            }
-        }
+fn get_circle(
+    mut meshes: ResMut<Assets<Mesh>>, 
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    color: Color,
+    translation: Vec3,
+    radius: f32,
+) -> MaterialMesh2dBundle<ColorMaterial> {
+     MaterialMesh2dBundle {
+        mesh: meshes.add(shape::Circle::default().into()).into(),
+        material: materials.add(ColorMaterial::from(color)),
+        transform: Transform::from_scale(Vec3::new(radius, radius, 1.0))
+            .with_translation(translation),
+        ..default() }
+}
+
+fn move_particle(time: Res<Time>, mut particles: Query<(&mut Transform, &Particle)>) {
+    for (mut transform, particle) in particles.iter_mut() {
+        transform.translation += particle.velocity * time.delta_seconds();
     }
 }
 
-fn move_player(key: Res<Input<KeyCode>>, mut query: Query<&mut Transform, With<Player>>) {
-    let speed = 7.0;
+fn move_player(
+    time: Res<Time>,
+    key: Res<Input<KeyCode>>, 
+    mut query: Query<&mut Transform, With<Player>>
+) {
+    let speed = time.delta_seconds() * 40.0;
     for mut transform in query.iter_mut() {
         if key.pressed(KeyCode::A) {
             transform.translation.x -= speed;
@@ -128,51 +175,112 @@ fn move_player(key: Res<Input<KeyCode>>, mut query: Query<&mut Transform, With<P
     }
 }
 
-fn spawn_particle(
-    mut commands: Commands, 
-    mut meshes: ResMut<Assets<Mesh>>, 
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    mut shoot_reader: EventReader<ShootEvent>,
-    query: Query<&Transform, With<Player>>,
-) {
-    if let Some(reader) = shoot_reader.iter().next() {
-        let translation = query.single().translation; 
-        let x = reader.cursor_position.x - translation.x;
-        let y = reader.cursor_position.y - translation.y;
-        let velocity = Vec3::new(x, y, 1.0).normalize();
-        let particle_translation = translation + CELL_SIZE * velocity;
-        let particle_size = 5.0;
-        commands.spawn(MaterialMesh2dBundle {
-            mesh: meshes.add(shape::Circle::default().into()).into(),
-            material: materials.add(ColorMaterial::from(Color::WHITE)),
-            transform: Transform::from_scale(Vec3::new(particle_size, particle_size, 1.0))
-                .with_translation(particle_translation),
-            ..default() })
-        .insert(Particle { velocity });
-    }
-}
-
-fn move_particle(mut particles: Query<(&mut Transform, &Particle)>) {
-    for (mut transform, particle) in particles.iter_mut() {
-        transform.translation += particle.velocity;
-    }
-}
-
-fn shoot_particle(
-    key: Res<Input<KeyCode>>, 
+fn input_particle(
     windows: Res<Windows>,
-    mut shoot_writer: EventWriter<ShootEvent>,
-    camera: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    key: Res<Input<KeyCode>>, 
+    query: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    mut writer: EventWriter<ShootEvent>,
 ) {
     if key.just_pressed(KeyCode::Space) {
-        let (camera, transform) = camera.single();
+        let (camera, transform) = query.single();
         let window = windows.get_primary().unwrap();
         if let Some(position) = window.cursor_position() 
             .and_then(|cursor| camera.viewport_to_world(transform, cursor))
             .map(|ray| ray.origin.truncate())
         {
-            shoot_writer.send(ShootEvent { cursor_position: position }); 
+            writer.send(ShootEvent { cursor_position: position }); 
         }
     }
+}
+ 
+fn input_virus(
+    key: Res<Input<KeyCode>>, 
+    query: Query<&Transform, With<Player>>,
+    mut writer: EventWriter<DropVirusEvent>,
+) {
+    if key.just_pressed(KeyCode::Q) {
+        let translation = query.single().translation;
+        writer.send(DropVirusEvent { translation });
+    }
+}
+
+fn despawn_cell(
+    mut commands: Commands,
+    mut state: ResMut<State<AppState>>,
+    mut message: ResMut<GameMessage>,
+    mut reader: EventReader<CollisionEvent>,
+) {
+    if let Some(collision) = reader.iter().next() {
+        if collision.is_player {
+            state.set(AppState::Menu).unwrap(); 
+            message.0 = "Game Over".to_string();
+        } else {
+            state.set(AppState::Menu).unwrap(); 
+            message.0 = "Victory".to_string();
+        }
+        commands.entity(collision.entity).despawn();
+    }
+}
+
+fn despawn_virus(
+    mut commands: Commands, 
+    time: Res<Time>, 
+    mut query: Query<(Entity, &mut Virus, &Transform)>,
+    mut writer: EventWriter<ExplodeEvent>,
+) {
+    for (entity, mut virus, transform) in query.iter_mut() {
+        if virus.0.tick(time.delta()).finished() {
+            commands.entity(entity).despawn();
+            let translation = transform.translation;
+            writer.send(ExplodeEvent { translation });
+        }
+    }
+}
+
+fn despawn_explosion(
+    mut commands: Commands,
+    time: Res<Time>,
+    mut query: Query<(Entity, &mut Explosion)>,
+) {
+    for (entity, mut explosion) in query.iter_mut() {
+        if explosion.0.tick(time.delta()).finished() {
+            commands.entity(entity).despawn();
+        }
+    } 
+}
+
+fn collide_explosion(
+    explosion_query: Query<&Transform, With<Explosion>>,
+    cell_query: Query<(Entity, &Transform, Option<&Player>), With<Cell>>,
+    mut writer: EventWriter<CollisionEvent>,
+) {
+    for explosion_transform in explosion_query.iter() {
+        for (entity, cell_transform, player) in cell_query.iter() {
+            if has_collided(explosion_transform, cell_transform) {
+                writer.send(CollisionEvent { entity, is_player: player.is_some() });
+            }
+        }
+    }
+}
+
+fn collide_particle(
+    particle_query: Query<&Transform,  With<Particle>>,
+    cell_query: Query<(Entity, &Transform, Option<&Player>), With<Cell>>,
+    mut writer: EventWriter<CollisionEvent>,
+) {
+    for particle_transform in particle_query.iter() {
+        for (entity, cell_transform, player) in cell_query.iter() {
+            if has_collided(particle_transform, cell_transform) {
+                writer.send(CollisionEvent { entity, is_player: player.is_some() });
+            }
+        }
+    }
+}
+
+fn has_collided(a: &Transform, b: &Transform) -> bool {
+    collide(
+        a.translation, a.scale.truncate(),
+        b.translation, b.scale.truncate(),
+    ).is_some()
 }
 
