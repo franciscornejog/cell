@@ -10,6 +10,11 @@ pub struct Cell;
 pub struct Player;
 
 #[derive(Component)]
+pub enum Direction {
+    North, South, East, West, None
+}
+
+#[derive(Component)]
 pub struct Enemy;
 
 #[derive(Component)]
@@ -23,3 +28,5 @@ pub struct Particle {
     pub velocity: Vec3,
 }
 
+#[derive(Component)]
+pub struct Wall;

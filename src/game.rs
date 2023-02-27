@@ -2,7 +2,10 @@ use bevy::{
     prelude::*, 
     sprite::{collide_aabb::collide, MaterialMesh2dBundle}};
 use crate::{SCREEN_WIDTH, SCREEN_HEIGHT, AppState};
-use crate::components::{MainCamera, Cell, Player, Enemy, Explosion, Virus, Particle};
+use crate::components::{
+    MainCamera, 
+    Cell, Player, Direction, Enemy, 
+    Explosion, Virus, Particle, Wall};
 use crate::events::{DropVirusEvent, ShootEvent, ExplodeEvent, CollisionEvent};
 use crate::ui::despawn_screen;
 use rand::prelude::random;
@@ -23,9 +26,11 @@ impl Plugin for GamePlugin {
         .add_event::<ExplodeEvent>()
         .add_event::<CollisionEvent>()
         .add_system_set(SystemSet::on_enter(AppState::Game)
+            .with_system(spawn_wall)
             .with_system(spawn_player)
             .with_system(spawn_enemy))
         .add_system_set(SystemSet::on_update(AppState::Game)
+            .with_system(input_player)
             .with_system(input_particle)
             .with_system(input_virus)
             .with_system(move_player)
@@ -39,6 +44,7 @@ impl Plugin for GamePlugin {
             .with_system(collide_particle)
             .with_system(collide_explosion))
         .add_system_set(SystemSet::on_exit(AppState::Game)
+            .with_system(despawn_screen::<Wall>)
             .with_system(despawn_screen::<Cell>)
             .with_system(despawn_screen::<Particle>)
             .with_system(despawn_screen::<Virus>)
@@ -46,23 +52,41 @@ impl Plugin for GamePlugin {
     }
 }
 
+fn spawn_wall(mut commands: Commands) {
+    let size = 20.0;
+    let top_translation = Vec3::new(0.0, SCREEN_HEIGHT / 2.0 - (size / 2.0), 1.0);
+    let bottom_translation = Vec3::new(0.0, -SCREEN_HEIGHT / 2.0 + (size / 2.0), 1.0);
+    let left_translation = Vec3::new(-SCREEN_WIDTH / 2.0 + (size / 2.0), 0.0, 1.0);
+    let right_translation = Vec3::new(SCREEN_WIDTH / 2.0 - (size / 2.0), 0.0, 1.0);
+    commands.spawn(get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, top_translation))
+        .insert(Wall);
+    commands.spawn(get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, bottom_translation))
+        .insert(Wall);
+    commands.spawn(get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, left_translation))
+        .insert(Wall);
+    commands.spawn(get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, right_translation))
+        .insert(Wall);
+}
+
 fn spawn_player(mut commands: Commands, query: Query<&Transform, With<Cell>>) {
     let translation = get_random_translation(query);
-    commands.spawn(get_square(Color::ORANGE_RED, CELL_SIZE, translation))
+    commands.spawn(get_rectangle(Color::ORANGE_RED, CELL_SIZE, CELL_SIZE, translation))
         .insert(Cell)
+        .insert(Direction::None)
         .insert(Player);
 }
 
 fn spawn_enemy(mut commands: Commands, query: Query<&Transform, With<Cell>>) {
     let translation = get_random_translation(query);
-    commands.spawn(get_square(Color::FUCHSIA, CELL_SIZE, translation))
+    commands.spawn(get_rectangle(Color::FUCHSIA, CELL_SIZE, CELL_SIZE, translation))
         .insert(Cell)
         .insert(Enemy);
 }
 
 fn spawn_virus(mut commands: Commands, mut reader: EventReader<DropVirusEvent>) {
     if let Some(reader) = reader.iter().next() {
-        commands.spawn(get_square(Color::VIOLET, CELL_SIZE / 2.0, reader.translation))
+        let size = CELL_SIZE / 2.0;
+        commands.spawn(get_rectangle(Color::VIOLET, size, size, reader.translation))
             .insert(Virus(Timer::from_seconds(5.0, TimerMode::Once)));
     }
 }
@@ -98,13 +122,13 @@ fn spawn_explosion(
     }
 }
 
-fn get_square(color: Color, size: f32, translation: Vec3) -> SpriteBundle {
+fn get_rectangle(color: Color, height: f32, width: f32, translation: Vec3) -> SpriteBundle {
     SpriteBundle {
         sprite: Sprite {
             color,
             ..default()
         },
-        transform: Transform::from_scale(Vec3::new(size, size, 1.0))
+        transform: Transform::from_scale(Vec3::new(height, width, 1.0))
             .with_translation(translation),
         ..default()
     }
@@ -153,24 +177,41 @@ fn move_particle(time: Res<Time>, mut particles: Query<(&mut Transform, &Particl
     }
 }
 
+fn input_player(key: Res<Input<KeyCode>>, mut query: Query<&mut Direction, With<Player>>) {
+    for mut direction in query.iter_mut() {
+        *direction = if key.pressed(KeyCode::A) {
+            Direction::West
+        } else if key.pressed(KeyCode::D) {
+            Direction::East
+        } else if key.pressed(KeyCode::W) {
+            Direction::North
+        } else if key.pressed(KeyCode::S) {
+            Direction::South
+        } else {
+            Direction::None
+        }
+    }
+}
+
 fn move_player(
-    time: Res<Time>,
-    key: Res<Input<KeyCode>>, 
-    mut query: Query<&mut Transform, With<Player>>
+    time: Res<Time>, 
+    mut player_query: Query<(&mut Transform, &Direction), With<Player>>,
+    wall_query: Query<&Transform, (With<Wall>, Without<Direction>)>,
 ) {
     let speed = time.delta_seconds() * 40.0;
-    for mut transform in query.iter_mut() {
-        if key.pressed(KeyCode::A) {
-            transform.translation.x -= speed;
+    for (mut transform, direction) in player_query.iter_mut() {
+        let mut new_transform = transform.clone();
+        match direction {
+            Direction::North => { new_transform.translation.y += speed; }
+            Direction::South => { new_transform.translation.y -= speed; }
+            Direction::East => { new_transform.translation.x += speed; }
+            Direction::West => { new_transform.translation.x -= speed; }
+            _ => {}
         }
-        if key.pressed(KeyCode::D) {
-            transform.translation.x += speed;
-        }
-        if key.pressed(KeyCode::W) {
-            transform.translation.y += speed;
-        }
-        if key.pressed(KeyCode::S) {
-            transform.translation.y -= speed;
+        let has_not_collided = !wall_query.iter()
+            .any(|wall_transform| has_collided(&new_transform, wall_transform));
+        if has_not_collided {
+            *transform = new_transform;
         }
     }
 }
