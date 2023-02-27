@@ -1,12 +1,12 @@
 use bevy::{
     prelude::*, 
-    sprite::{collide_aabb::collide, MaterialMesh2dBundle}};
+    sprite::collide_aabb::collide};
 use crate::{SCREEN_WIDTH, SCREEN_HEIGHT, AppState};
 use crate::components::{
     MainCamera, 
-    Cell, Player, Direction, Enemy, 
+    Cell, Player, Direction, Enemy, Lifespan,
     Explosion, Virus, Particle, Wall};
-use crate::events::{DropVirusEvent, ShootEvent, ExplodeEvent, CollisionEvent};
+use crate::events::{DropVirusEvent, EjectEvent, ExplodeEvent};
 use crate::ui::despawn_screen;
 use rand::prelude::random;
 
@@ -22,9 +22,8 @@ impl Plugin for GamePlugin {
         app
         .insert_resource(GameMessage("Paused".to_string()))
         .add_event::<DropVirusEvent>()
-        .add_event::<ShootEvent>()
+        .add_event::<EjectEvent>()
         .add_event::<ExplodeEvent>()
-        .add_event::<CollisionEvent>()
         .add_system_set(SystemSet::on_enter(AppState::Game)
             .with_system(spawn_cell)
             .with_system(spawn_wall))
@@ -34,13 +33,14 @@ impl Plugin for GamePlugin {
             .with_system(input_virus)
             .with_system(move_player)
             .with_system(move_particle)
+            .with_system(spawn_enemy_particle)
             .with_system(spawn_particle.after(input_particle))
             .with_system(spawn_virus.after(input_virus))
             .with_system(spawn_explosion.after(despawn_virus))
             .with_system(despawn_virus)
             .with_system(despawn_explosion) 
-            .with_system(despawn_cell) 
-            // .with_system(collide_particle)
+            .with_system(despawn_lifespan) 
+            .with_system(collide_particle)
             .with_system(collide_explosion))
         .add_system_set(SystemSet::on_exit(AppState::Game)
             .with_system(despawn_screen::<Wall>)
@@ -74,51 +74,63 @@ fn spawn_cell(
 ) {
     let translation = get_random_translation(&wall_query, &cell_query);
     commands.spawn(get_rectangle(Color::ORANGE_RED, CELL_SIZE, CELL_SIZE, translation))
-        .insert(Cell)
+        .insert(Lifespan(1))
         .insert(Direction::None)
+        .insert(Cell)
         .insert(Player);
     let translation = get_random_translation(&wall_query, &cell_query);
     commands.spawn(get_rectangle(Color::FUCHSIA, CELL_SIZE, CELL_SIZE, translation))
+        .insert(Lifespan(1))
         .insert(Cell)
-        .insert(Enemy);
+        .insert(Enemy(Timer::from_seconds(5.0, TimerMode::Repeating)));
 }
 
 fn spawn_virus(mut commands: Commands, mut reader: EventReader<DropVirusEvent>) {
     if let Some(reader) = reader.iter().next() {
         let size = CELL_SIZE / 2.0;
-        commands.spawn(get_rectangle(Color::VIOLET, size, size, reader.translation))
+        commands.spawn(get_rectangle(Color::YELLOW_GREEN, size, size, reader.translation))
             .insert(Virus(Timer::from_seconds(5.0, TimerMode::Once)));
     }
 }
 
 fn spawn_particle(
     mut commands: Commands, 
-    meshes: ResMut<Assets<Mesh>>, 
-    materials: ResMut<Assets<ColorMaterial>>,
-    mut reader: EventReader<ShootEvent>,
-    query: Query<&Transform, With<Player>>,
+    mut reader: EventReader<EjectEvent>,
+    asset_server: Res<AssetServer>,
 ) {
     if let Some(reader) = reader.iter().next() {
-        let translation = query.single().translation; 
-        let x = reader.cursor_position.x - translation.x;
-        let y = reader.cursor_position.y - translation.y;
+        let x = reader.target_position.x - reader.translation.x;
+        let y = reader.target_position.y - reader.translation.y;
         let velocity = Vec3::new(x, y, 1.0).normalize();
-        let particle_translation = translation + CELL_SIZE * velocity;
-        let radius = 5.0;
-        let circle = get_circle(meshes, materials, Color::WHITE, particle_translation, radius);
-        commands.spawn(circle).insert(Particle { velocity: velocity * 300.0 });
+        let particle_translation = reader.translation + CELL_SIZE * velocity;
+        let radius = 0.05;
+        let texture: Handle<Image> = asset_server.load("components/particle.png");
+        let sprite = get_sprite(radius, particle_translation, texture);
+        commands.spawn(sprite)
+            .insert(Lifespan(2))
+            .insert(Particle { velocity: velocity * 250.0 });
     }
 }
 
 fn spawn_explosion(
     mut commands: Commands,
-    meshes: ResMut<Assets<Mesh>>,
-    materials: ResMut<Assets<ColorMaterial>>,
     mut explode_reader: EventReader<ExplodeEvent>,
+    asset_server: Res<AssetServer>,
 ) {
     if let Some(reader) = explode_reader.iter().next() {
-        let circle = get_circle(meshes, materials, Color::RED, reader.translation, 100.0);
-        commands.spawn(circle).insert(Explosion(Timer::from_seconds(1.0, TimerMode::Once)));
+        let radius = 1.0;
+        let texture: Handle<Image> = asset_server.load("components/explosion.png");
+        let sprite = get_sprite(radius, reader.translation, texture);
+        commands.spawn(sprite).insert(Explosion(Timer::from_seconds(1.0, TimerMode::Once)));
+    }
+}
+
+fn get_sprite(size: f32, translation: Vec3, texture: Handle<Image>) -> SpriteBundle {
+    SpriteBundle {
+        texture,
+        transform: Transform::from_scale(Vec3::new(size, size, 1.0))
+            .with_translation(translation),
+        ..default()
     }
 }
 
@@ -160,27 +172,12 @@ fn get_random_position(size: f32) -> f32 {
     (random::<f32>() * (size - CELL_SIZE)) - (size / 2.0 - (CELL_SIZE / 2.0))
 }
 
-fn get_circle(
-    mut meshes: ResMut<Assets<Mesh>>, 
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    color: Color,
-    translation: Vec3,
-    radius: f32,
-) -> MaterialMesh2dBundle<ColorMaterial> {
-     MaterialMesh2dBundle {
-        mesh: meshes.add(shape::Circle::default().into()).into(),
-        material: materials.add(ColorMaterial::from(color)),
-        transform: Transform::from_scale(Vec3::new(radius, radius, 1.0))
-            .with_translation(translation),
-        ..default() }
-}
-
 fn move_particle(
     time: Res<Time>, 
     wall_query: Query<&Transform, (With<Wall>, Without<Direction>)>,
-    mut particle_query: Query<(&mut Transform, &mut Particle), Without<Wall>>,
+    mut particle_query: Query<(&mut Transform, &mut Lifespan, &mut Particle), Without<Wall>>,
 ) {
-    for (mut transform, mut particle) in particle_query.iter_mut() {
+    for (mut transform, mut lifespan, mut particle) in particle_query.iter_mut() {
         let mut new_transform = transform.clone();
         new_transform.translation += particle.velocity * time.delta_seconds();
         let mut wall_iter = wall_query.iter()
@@ -193,6 +190,7 @@ fn move_particle(
                 } else {
                     particle.velocity.y = -particle.velocity.y;
                 }
+                lifespan.0 -= 1;
                 transform.translation += particle.velocity * time.delta_seconds();
             }
         }
@@ -204,7 +202,7 @@ fn move_player(
     wall_query: Query<&Transform, (With<Wall>, Without<Direction>)>,
     mut player_query: Query<(&mut Transform, &Direction), With<Player>>,
 ) {
-    let speed = time.delta_seconds() * 40.0;
+    let speed = time.delta_seconds() * 60.0;
     for (mut transform, direction) in player_query.iter_mut() {
         let mut new_transform = transform.clone();
         match direction {
@@ -241,17 +239,19 @@ fn input_player(key: Res<Input<KeyCode>>, mut query: Query<&mut Direction, With<
 fn input_particle(
     windows: Res<Windows>,
     key: Res<Input<KeyCode>>, 
-    query: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
-    mut writer: EventWriter<ShootEvent>,
+    player_query: Query<&Transform, With<Player>>,
+    camera_query: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    mut writer: EventWriter<EjectEvent>,
 ) {
     if key.just_pressed(KeyCode::Space) {
-        let (camera, transform) = query.single();
+        let (camera, transform) = camera_query.single();
         let window = windows.get_primary().unwrap();
-        if let Some(position) = window.cursor_position() 
+        if let Some(target_position) = window.cursor_position() 
             .and_then(|cursor| camera.viewport_to_world(transform, cursor))
             .map(|ray| ray.origin.truncate())
         {
-            writer.send(ShootEvent { cursor_position: position }); 
+            let translation = player_query.single().translation;
+            writer.send(EjectEvent { translation, target_position }); 
         }
     }
 }
@@ -267,21 +267,23 @@ fn input_virus(
     }
 }
 
-fn despawn_cell(
+fn despawn_lifespan(
     mut commands: Commands,
     mut state: ResMut<State<AppState>>,
     mut message: ResMut<GameMessage>,
-    mut reader: EventReader<CollisionEvent>,
+    query: Query<(Entity, &Lifespan, Option<&Player>, Option<&Enemy>)>,
 ) {
-    if let Some(collision) = reader.iter().next() {
-        if collision.is_player {
-            state.set(AppState::Menu).unwrap(); 
-            message.0 = "Game Over".to_string();
-        } else {
-            state.set(AppState::Menu).unwrap(); 
-            message.0 = "Victory".to_string();
+    for (entity, lifespan, player, enemy) in query.iter() {
+        if lifespan.0 <= 0 {
+            if player.is_some() {
+                state.set(AppState::Menu).unwrap(); 
+                message.0 = "Game Over".to_string();
+            } else if enemy.is_some() {
+                state.set(AppState::Menu).unwrap(); 
+                message.0 = "Victory".to_string();
+            }
+            commands.entity(entity).despawn();
         }
-        commands.entity(collision.entity).despawn();
     }
 }
 
@@ -300,6 +302,21 @@ fn despawn_virus(
     }
 }
 
+fn spawn_enemy_particle(
+    time: Res<Time>,
+    player_query: Query<&Transform, With<Player>>,
+    mut enemy_query: Query<(&Transform, &mut Enemy)>,
+    mut writer: EventWriter<EjectEvent>,
+) {
+    for (transform, mut enemy) in enemy_query.iter_mut() {
+        if enemy.0.tick(time.delta()).just_finished() {
+            let player_position = player_query.single().translation.truncate();
+            let translation = transform.translation;
+            writer.send(EjectEvent { translation, target_position: player_position });
+        }
+    }
+}
+
 fn despawn_explosion(
     mut commands: Commands,
     time: Res<Time>,
@@ -314,13 +331,12 @@ fn despawn_explosion(
 
 fn collide_explosion(
     explosion_query: Query<&Transform, With<Explosion>>,
-    cell_query: Query<(Entity, &Transform, Option<&Player>), With<Cell>>,
-    mut writer: EventWriter<CollisionEvent>,
+    mut cell_query: Query<(&Transform, &mut Lifespan), With<Cell>>,
 ) {
     for explosion_transform in explosion_query.iter() {
-        for (entity, cell_transform, player) in cell_query.iter() {
+        for (cell_transform, mut lifespan) in cell_query.iter_mut() {
             if has_collided(explosion_transform, cell_transform) {
-                writer.send(CollisionEvent { entity, is_player: player.is_some() });
+                lifespan.0 -= 1;
             }
         }
     }
@@ -328,13 +344,12 @@ fn collide_explosion(
 
 fn collide_particle(
     particle_query: Query<&Transform,  With<Particle>>,
-    cell_query: Query<(Entity, &Transform, Option<&Player>), With<Cell>>,
-    mut writer: EventWriter<CollisionEvent>,
+    mut cell_query: Query<(&Transform, &mut Lifespan), With<Cell>>,
 ) {
     for particle_transform in particle_query.iter() {
-        for (entity, cell_transform, player) in cell_query.iter() {
+        for (cell_transform, mut lifespan) in cell_query.iter_mut() {
             if has_collided(particle_transform, cell_transform) {
-                writer.send(CollisionEvent { entity, is_player: player.is_some() });
+                lifespan.0 -= 1;
             }
         }
     }
