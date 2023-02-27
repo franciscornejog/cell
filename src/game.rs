@@ -4,7 +4,7 @@ use bevy::{
 use crate::{SCREEN_WIDTH, SCREEN_HEIGHT, AppState};
 use crate::components::{
     MainCamera, 
-    Cell, Player, Direction, Enemy, Lifespan,
+    Cell, Player, Direction, Hostile, Enemy, Lifespan,
     Explosion, Virus, Particle, Wall};
 use crate::events::{DropVirusEvent, EjectEvent, ExplodeEvent};
 use crate::ui::despawn_screen;
@@ -40,8 +40,7 @@ impl Plugin for GamePlugin {
             .with_system(despawn_virus)
             .with_system(despawn_explosion) 
             .with_system(despawn_lifespan) 
-            .with_system(collide_particle)
-            .with_system(collide_explosion))
+            .with_system(collide_hostile))
         .add_system_set(SystemSet::on_exit(AppState::Game)
             .with_system(despawn_screen::<Wall>)
             .with_system(despawn_screen::<Cell>)
@@ -82,7 +81,7 @@ fn spawn_cell(
     commands.spawn(get_rectangle(Color::FUCHSIA, CELL_SIZE, CELL_SIZE, translation))
         .insert(Lifespan(1))
         .insert(Cell)
-        .insert(Enemy(Timer::from_seconds(5.0, TimerMode::Repeating)));
+        .insert(Enemy(Timer::from_seconds(2.0, TimerMode::Repeating)));
 }
 
 fn spawn_virus(mut commands: Commands, mut reader: EventReader<DropVirusEvent>) {
@@ -108,6 +107,7 @@ fn spawn_particle(
         let sprite = get_sprite(radius, particle_translation, texture);
         commands.spawn(sprite)
             .insert(Lifespan(2))
+            .insert(Hostile)
             .insert(Particle { velocity: velocity * 250.0 });
     }
 }
@@ -121,7 +121,9 @@ fn spawn_explosion(
         let radius = 1.0;
         let texture: Handle<Image> = asset_server.load("components/explosion.png");
         let sprite = get_sprite(radius, reader.translation, texture);
-        commands.spawn(sprite).insert(Explosion(Timer::from_seconds(1.0, TimerMode::Once)));
+        commands.spawn(sprite)
+            .insert(Hostile)
+            .insert(Explosion(Timer::from_seconds(1.0, TimerMode::Once)));
     }
 }
 
@@ -329,26 +331,13 @@ fn despawn_explosion(
     } 
 }
 
-fn collide_explosion(
-    explosion_query: Query<&Transform, With<Explosion>>,
+fn collide_hostile(
+    hostile_query: Query<&Transform, With<Hostile>>,
     mut cell_query: Query<(&Transform, &mut Lifespan), With<Cell>>,
 ) {
-    for explosion_transform in explosion_query.iter() {
+    for hostile_transform in hostile_query.iter() {
         for (cell_transform, mut lifespan) in cell_query.iter_mut() {
-            if has_collided(explosion_transform, cell_transform) {
-                lifespan.0 -= 1;
-            }
-        }
-    }
-}
-
-fn collide_particle(
-    particle_query: Query<&Transform,  With<Particle>>,
-    mut cell_query: Query<(&Transform, &mut Lifespan), With<Cell>>,
-) {
-    for particle_transform in particle_query.iter() {
-        for (cell_transform, mut lifespan) in cell_query.iter_mut() {
-            if has_collided(particle_transform, cell_transform) {
+            if has_collided(hostile_transform, cell_transform) {
                 lifespan.0 -= 1;
             }
         }

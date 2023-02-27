@@ -15,6 +15,9 @@ pub enum Direction {
 }
 
 #[derive(Component)]
+pub struct Hostile;
+
+#[derive(Component)]
 pub struct Lifespan(pub i32);
 
 #[derive(Component)]
