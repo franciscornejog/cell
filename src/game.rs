@@ -26,9 +26,8 @@ impl Plugin for GamePlugin {
         .add_event::<ExplodeEvent>()
         .add_event::<CollisionEvent>()
         .add_system_set(SystemSet::on_enter(AppState::Game)
-            .with_system(spawn_wall)
-            .with_system(spawn_player)
-            .with_system(spawn_enemy))
+            .with_system(spawn_cell)
+            .with_system(spawn_wall))
         .add_system_set(SystemSet::on_update(AppState::Game)
             .with_system(input_player)
             .with_system(input_particle)
@@ -41,7 +40,7 @@ impl Plugin for GamePlugin {
             .with_system(despawn_virus)
             .with_system(despawn_explosion) 
             .with_system(despawn_cell) 
-            .with_system(collide_particle)
+            // .with_system(collide_particle)
             .with_system(collide_explosion))
         .add_system_set(SystemSet::on_exit(AppState::Game)
             .with_system(despawn_screen::<Wall>)
@@ -68,16 +67,17 @@ fn spawn_wall(mut commands: Commands) {
         .insert(Wall);
 }
 
-fn spawn_player(mut commands: Commands, query: Query<&Transform, With<Cell>>) {
-    let translation = get_random_translation(query);
+fn spawn_cell(
+    mut commands: Commands, 
+    wall_query: Query<&Transform, (With<Wall>, Without<Direction>)>,
+    cell_query: Query<&Transform, (With<Cell>, Without<Wall>)>,
+) {
+    let translation = get_random_translation(&wall_query, &cell_query);
     commands.spawn(get_rectangle(Color::ORANGE_RED, CELL_SIZE, CELL_SIZE, translation))
         .insert(Cell)
         .insert(Direction::None)
         .insert(Player);
-}
-
-fn spawn_enemy(mut commands: Commands, query: Query<&Transform, With<Cell>>) {
-    let translation = get_random_translation(query);
+    let translation = get_random_translation(&wall_query, &cell_query);
     commands.spawn(get_rectangle(Color::FUCHSIA, CELL_SIZE, CELL_SIZE, translation))
         .insert(Cell)
         .insert(Enemy);
@@ -134,20 +134,24 @@ fn get_rectangle(color: Color, height: f32, width: f32, translation: Vec3) -> Sp
     }
 }
 
-fn get_random_translation(query: Query<&Transform, With<Cell>>) -> Vec3 {
+fn get_random_translation(
+    wall_query: &Query<&Transform, (With<Wall>, Without<Direction>)>,
+    cell_query: &Query<&Transform, (With<Cell>, Without<Wall>)>,
+) -> Vec3 {
     let mut width = get_random_position(SCREEN_WIDTH);
     let mut height = get_random_position(SCREEN_HEIGHT);
-    for transform in query.iter() {
-        let collision = collide(
-            Vec3::new(width, height, 1.0),
-            Vec2::new(CELL_SIZE, CELL_SIZE),
-            transform.translation,
-            transform.scale.truncate(),
-        );
-        if collision.is_some() {
-            width = get_random_position(SCREEN_WIDTH);
-            height = get_random_position(SCREEN_HEIGHT);
-        }
+    let new_transform = Transform {
+        translation: Vec3::new(width, height, 1.0),
+        scale: Vec3::new(CELL_SIZE, CELL_SIZE, 1.0),
+        ..default()
+    };
+    while cell_query.iter()
+        .any(|cell_transform| has_collided(cell_transform, &new_transform))
+        && wall_query.iter()
+            .any(|wall_transform| has_collided(wall_transform, &new_transform))
+    {
+        width = get_random_position(SCREEN_WIDTH);
+        height = get_random_position(SCREEN_HEIGHT);
     }
     Vec3::new(width, height, 1.0)
 }
@@ -171,32 +175,34 @@ fn get_circle(
         ..default() }
 }
 
-fn move_particle(time: Res<Time>, mut particles: Query<(&mut Transform, &Particle)>) {
-    for (mut transform, particle) in particles.iter_mut() {
-        transform.translation += particle.velocity * time.delta_seconds();
-    }
-}
-
-fn input_player(key: Res<Input<KeyCode>>, mut query: Query<&mut Direction, With<Player>>) {
-    for mut direction in query.iter_mut() {
-        *direction = if key.pressed(KeyCode::A) {
-            Direction::West
-        } else if key.pressed(KeyCode::D) {
-            Direction::East
-        } else if key.pressed(KeyCode::W) {
-            Direction::North
-        } else if key.pressed(KeyCode::S) {
-            Direction::South
-        } else {
-            Direction::None
+fn move_particle(
+    time: Res<Time>, 
+    wall_query: Query<&Transform, (With<Wall>, Without<Direction>)>,
+    mut particle_query: Query<(&mut Transform, &mut Particle), Without<Wall>>,
+) {
+    for (mut transform, mut particle) in particle_query.iter_mut() {
+        let mut new_transform = transform.clone();
+        new_transform.translation += particle.velocity * time.delta_seconds();
+        let mut wall_iter = wall_query.iter()
+            .filter(|wall_transform| has_collided(&new_transform, wall_transform));
+        match wall_iter.next() {
+            None => { *transform = new_transform; }
+            Some(wall_transform) => {
+                if wall_transform.scale.x < SCREEN_WIDTH {
+                    particle.velocity.x = -particle.velocity.x;
+                } else {
+                    particle.velocity.y = -particle.velocity.y;
+                }
+                transform.translation += particle.velocity * time.delta_seconds();
+            }
         }
     }
 }
 
 fn move_player(
     time: Res<Time>, 
-    mut player_query: Query<(&mut Transform, &Direction), With<Player>>,
     wall_query: Query<&Transform, (With<Wall>, Without<Direction>)>,
+    mut player_query: Query<(&mut Transform, &Direction), With<Player>>,
 ) {
     let speed = time.delta_seconds() * 40.0;
     for (mut transform, direction) in player_query.iter_mut() {
@@ -212,6 +218,22 @@ fn move_player(
             .any(|wall_transform| has_collided(&new_transform, wall_transform));
         if has_not_collided {
             *transform = new_transform;
+        }
+    }
+}
+
+fn input_player(key: Res<Input<KeyCode>>, mut query: Query<&mut Direction, With<Player>>) {
+    for mut direction in query.iter_mut() {
+        *direction = if key.pressed(KeyCode::A) {
+            Direction::West
+        } else if key.pressed(KeyCode::D) {
+            Direction::East
+        } else if key.pressed(KeyCode::W) {
+            Direction::North
+        } else if key.pressed(KeyCode::S) {
+            Direction::South
+        } else {
+            Direction::None
         }
     }
 }
