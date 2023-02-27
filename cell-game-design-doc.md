@@ -21,10 +21,13 @@ Minimum Viable Product
 
 Stretch Goals 
 1. Add second player
-2. Player can drop a virus (bomb)
-3. Add barriers (membrane vs cell wall)
-4. Add score system
-5. Create more levels
-6. Particles can bounce off walls
-7. Create walls
+2. Player can drop a virus (bomb) to kill
+3. Walls (membrane vs cell wall)
+4. Score system
+5. More levels
+6. Particles bounce off walls
+7. Power-ups
+8. Invisibility
+9. Enemy types
+10. Super-fast particles (from power-up)
 
