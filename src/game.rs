@@ -6,7 +6,7 @@ use crate::components::{
     MainCamera, 
     Cell, Player, Enemy, 
     Hostile, Lifespan,
-    Direction, Velocity,
+    Velocity,
     Explosion, Virus, 
     Particle, Wall
 };
@@ -35,7 +35,7 @@ impl Plugin for GamePlugin {
             .with_system(input_player)
             .with_system(input_particle)
             .with_system(input_virus)
-            .with_system(move_player)
+            .with_system(move_player.after(input_player))
             .with_system(move_particle)
             .with_system(spawn_enemy_particle)
             .with_system(spawn_particle.after(input_particle))
@@ -68,16 +68,16 @@ fn spawn_wall(mut commands: Commands) {
 
 fn spawn_cell(
     mut commands: Commands, 
-    wall_query: Query<&Transform, (With<Wall>, Without<Direction>)>,
+    wall_query: Query<&Transform, (With<Wall>, Without<Cell>)>,
     cell_query: Query<&Transform, (With<Cell>, Without<Wall>)>,
 ) {
     let translation = get_random_translation(&wall_query, &cell_query);
     commands.spawn((
         get_rectangle(Color::ORANGE_RED, CELL_SIZE, CELL_SIZE, translation),
         Cell,
-        Direction::None,
         Lifespan(1),
         Player,
+        Velocity(Vec3::Z),
     ));
     let translation = get_random_translation(&wall_query, &cell_query);
     commands.spawn((
@@ -159,7 +159,7 @@ fn get_rectangle(color: Color, height: f32, width: f32, translation: Vec3) -> Sp
 }
 
 fn get_random_translation(
-    wall_query: &Query<&Transform, (With<Wall>, Without<Direction>)>,
+    wall_query: &Query<&Transform, (With<Wall>, Without<Cell>)>,
     cell_query: &Query<&Transform, (With<Cell>, Without<Wall>)>,
 ) -> Vec3 {
     let mut width = get_random_position(SCREEN_WIDTH);
@@ -211,40 +211,37 @@ fn move_particle(
 
 fn move_player(
     time: Res<Time>, 
-    wall_query: Query<&Transform, (With<Wall>, Without<Direction>)>,
-    mut player_query: Query<(&mut Transform, &Direction), With<Player>>,
+    wall_query: Query<&Transform, (With<Wall>, Without<Player>)>,
+    mut player_query: Query<(&mut Transform, &Velocity), (With<Player>, Changed<Velocity>)>,
 ) {
-    let speed = time.delta_seconds() * 60.0;
-    for (mut transform, direction) in player_query.iter_mut() {
-        let mut new_transform = transform.clone();
-        match direction {
-            Direction::North => { new_transform.translation.y += speed; }
-            Direction::South => { new_transform.translation.y -= speed; }
-            Direction::East => { new_transform.translation.x += speed; }
-            Direction::West => { new_transform.translation.x -= speed; }
-            _ => {}
-        }
-        let has_not_collided = !wall_query.iter()
-            .any(|wall_transform| has_collided(&new_transform, wall_transform));
-        if has_not_collided {
-            *transform = new_transform;
-        }
+    let initial_velocity = 60.0;
+    let (mut transform, velocity) = player_query.single_mut();
+    let mut new_transform = transform.clone();
+    new_transform.translation += velocity.0.normalize() * time.delta_seconds() * initial_velocity;
+    let has_not_collided = !wall_query.iter()
+        .any(|wall_transform| has_collided(&new_transform, wall_transform));
+    if has_not_collided {
+        transform.translation = new_transform.translation;
     }
 }
 
-fn input_player(key: Res<Input<KeyCode>>, mut query: Query<&mut Direction, With<Player>>) {
-    for mut direction in query.iter_mut() {
-        *direction = if key.pressed(KeyCode::A) {
-            Direction::West
-        } else if key.pressed(KeyCode::D) {
-            Direction::East
-        } else if key.pressed(KeyCode::W) {
-            Direction::North
-        } else if key.pressed(KeyCode::S) {
-            Direction::South
-        } else {
-            Direction::None
-        }
+fn input_player(key: Res<Input<KeyCode>>, mut query: Query<&mut Velocity, With<Player>>) {
+    let mut velocity = query.single_mut();
+    if key.pressed(KeyCode::A) {
+        velocity.0.x = -1.0;
+    }
+    if key.pressed(KeyCode::D) {
+        velocity.0.x = 1.0;
+    } 
+    if key.pressed(KeyCode::W) {
+        velocity.0.y = 1.0;
+    } 
+    if key.pressed(KeyCode::S) {
+        velocity.0.y = -1.0;
+    }
+    if !key.any_pressed([KeyCode::A, KeyCode::D, KeyCode::W, KeyCode::S]) {
+        velocity.0.x = 0.0;
+        velocity.0.y = 0.0;
     }
 }
 

@@ -7,11 +7,6 @@ pub struct Cell;
 pub struct Player;
 
 #[derive(Component)]
-pub enum Direction {
-    North, South, East, West, None
-}
-
-#[derive(Component)]
 pub struct Lifespan(pub i32);
 
 #[derive(Component)]
