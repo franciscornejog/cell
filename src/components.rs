@@ -33,6 +33,7 @@ pub struct Explosion(pub Timer);
 pub struct Virus(pub Timer);
 
 #[derive(Component)]
-pub struct Particle {
-    pub velocity: Vec3,
-}
+pub struct Particle;
+
+#[derive(Component)]
+pub struct Velocity(pub Vec3);

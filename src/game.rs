@@ -4,8 +4,12 @@ use bevy::{
 use crate::{SCREEN_WIDTH, SCREEN_HEIGHT, AppState};
 use crate::components::{
     MainCamera, 
-    Cell, Player, Direction, Hostile, Enemy, Lifespan,
-    Explosion, Virus, Particle, Wall};
+    Cell, Player, Enemy, 
+    Hostile, Lifespan,
+    Direction, Velocity,
+    Explosion, Virus, 
+    Particle, Wall
+};
 use crate::events::{DropVirusEvent, EjectEvent, ExplodeEvent};
 use crate::ui::despawn_screen;
 use rand::prelude::random;
@@ -70,25 +74,27 @@ fn spawn_cell(
     let translation = get_random_translation(&wall_query, &cell_query);
     commands.spawn((
         get_rectangle(Color::ORANGE_RED, CELL_SIZE, CELL_SIZE, translation),
-        Lifespan(1),
-        Direction::None,
         Cell,
+        Direction::None,
+        Lifespan(1),
         Player,
     ));
     let translation = get_random_translation(&wall_query, &cell_query);
     commands.spawn((
         get_rectangle(Color::FUCHSIA, CELL_SIZE, CELL_SIZE, translation),
-        Lifespan(1),
         Cell,
         Enemy(Timer::from_seconds(2.0, TimerMode::Repeating)),
+        Lifespan(1),
     ));
 }
 
 fn spawn_virus(mut commands: Commands, mut reader: EventReader<DropVirusEvent>) {
     if let Some(reader) = reader.iter().next() {
         let size = CELL_SIZE / 2.0;
-        commands.spawn(get_rectangle(Color::YELLOW_GREEN, size, size, reader.translation))
-            .insert(Virus(Timer::from_seconds(5.0, TimerMode::Once)));
+        commands.spawn((
+            get_rectangle(Color::YELLOW_GREEN, size, size, reader.translation),
+            Virus(Timer::from_seconds(5.0, TimerMode::Once)),
+        ));
     }
 }
 
@@ -104,11 +110,14 @@ fn spawn_particle(
         let particle_translation = reader.translation + CELL_SIZE * velocity;
         let radius = 0.05;
         let texture: Handle<Image> = asset_server.load("components/particle.png");
-        let sprite = get_sprite(radius, particle_translation, texture);
-        commands.spawn(sprite)
-            .insert(Lifespan(2))
-            .insert(Hostile)
-            .insert(Particle { velocity: velocity * 250.0 });
+        let initial_velocity = 250.0;
+        commands.spawn((
+            get_sprite(radius, particle_translation, texture),
+            Hostile,
+            Lifespan(2),
+            Particle,
+            Velocity(velocity * initial_velocity),
+        ));
     }
 }
 
@@ -120,10 +129,11 @@ fn spawn_explosion(
     if let Some(reader) = explode_reader.iter().next() {
         let radius = 1.0;
         let texture: Handle<Image> = asset_server.load("components/explosion.png");
-        let sprite = get_sprite(radius, reader.translation, texture);
-        commands.spawn(sprite)
-            .insert(Hostile)
-            .insert(Explosion(Timer::from_seconds(1.0, TimerMode::Once)));
+        commands.spawn((
+            get_sprite(radius, reader.translation, texture),
+            Hostile,
+            Explosion(Timer::from_seconds(1.0, TimerMode::Once)),
+        ));
     }
 }
 
@@ -176,24 +186,24 @@ fn get_random_position(size: f32) -> f32 {
 
 fn move_particle(
     time: Res<Time>, 
-    wall_query: Query<&Transform, (With<Wall>, Without<Direction>)>,
-    mut particle_query: Query<(&mut Transform, &mut Lifespan, &mut Particle), Without<Wall>>,
+    wall_query: Query<&Transform, (With<Wall>, Without<Particle>)>,
+    mut particle_query: Query<(&mut Transform, &mut Lifespan, &mut Velocity), With<Particle>>,
 ) {
-    for (mut transform, mut lifespan, mut particle) in particle_query.iter_mut() {
+    for (mut transform, mut lifespan, mut velocity) in particle_query.iter_mut() {
         let mut new_transform = transform.clone();
-        new_transform.translation += particle.velocity * time.delta_seconds();
+        new_transform.translation += velocity.0 * time.delta_seconds();
         let mut wall_iter = wall_query.iter()
             .filter(|wall_transform| has_collided(&new_transform, wall_transform));
         match wall_iter.next() {
             None => { *transform = new_transform; }
             Some(wall_transform) => {
                 if wall_transform.scale.x < SCREEN_WIDTH {
-                    particle.velocity.x = -particle.velocity.x;
+                    velocity.0.x = -velocity.0.x;
                 } else {
-                    particle.velocity.y = -particle.velocity.y;
+                    velocity.0.y = -velocity.0.y;
                 }
                 lifespan.0 -= 1;
-                transform.translation += particle.velocity * time.delta_seconds();
+                transform.translation += velocity.0 * time.delta_seconds();
             }
         }
     }
