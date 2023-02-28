@@ -1,0 +1,69 @@
+(
+  entities: {
+    0: (
+      components: {
+        "bevy_sprite::sprite::Sprite": (
+          color: Rgba(
+            red: 1.0,
+            green: 1.0,
+            blue: 1.0,
+            alpha: 1.0,
+          ),
+          flip_x: false,
+          flip_y: false,
+          custom_size: None,
+          rect: None,
+          anchor: Center,
+        ),
+        "bevy_transform::components::transform::Transform": (
+          translation: (
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+          ),
+          rotation: (0.0, 0.0, 0.0, 1.0),
+          scale: (
+            x: 25.0,
+            y: 25.0,
+            z: 1.0,
+          ),
+        ),
+        "bevy_transform::components::global_transform::GlobalTransform": ((
+          matrix3: (
+            x_axis: (
+              x: 1.0,
+              y: 0.0,
+              z: 0.0,
+            ),
+            y_axis: (
+              x: 0.0,
+              y: 1.0,
+              z: 0.0,
+            ),
+            z_axis: (
+              x: 0.0,
+              y: 0.0,
+              z: 1.0,
+            ),
+          ),
+          translation: (
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+          ),
+        )),
+        "bevy_asset::handle::Handle<bevy_render::texture::image::Image>": (
+          id: Id("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f", 13148262314052771789),
+        ),
+        "bevy_render::view::visibility::Visibility": (
+          is_visible: true,
+        ),
+        "bevy_render::view::visibility::ComputedVisibility": (
+          is_visible_in_hierarchy: false,
+          is_visible_in_view: false,
+        ),
+        "cell::components::Wall": (),
+      },
+    ),
+  },
+)

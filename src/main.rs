@@ -11,11 +11,13 @@ mod ui;
 mod game;
 mod splash;
 mod menu;
+mod scene;
 
 use components::MainCamera;
 use splash::SplashPlugin;
 use game::GamePlugin;
 use menu::MenuPlugin;
+// use scene::ScenePlugin;
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]
 enum AppState {
@@ -39,6 +41,7 @@ fn main() {
         .add_startup_system(spawn_camera)
         .add_state(AppState::Splash)
         .add_plugin(SplashPlugin)
+        // .add_plugin(ScenePlugin)
         .add_plugin(GamePlugin)
         .add_plugin(MenuPlugin)
         .add_system(close_on_esc)

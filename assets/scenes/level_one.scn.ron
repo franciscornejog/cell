@@ -1,0 +1,112 @@
+(
+  entities: {
+    0: (
+      components: {
+        "cell::components::Wall": (),
+        "bevy_transform::components::transform::Transform": (
+          translation: (
+            x: 0.0,
+            y: 240.0,
+            z: 1.0,
+          ),
+          rotation: (0.0, 0.0, 0.0, 1.0),
+          scale: (
+            x: 500.0,
+            y: 20.0,
+            z: 1.0,
+          ),
+        ),
+        "bevy_asset::handle::Handle<bevy_render::texture::image::Image>": (
+          id: Id("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f", 13148262314052771789),
+        ),
+      },
+    ),
+    1: (
+      components: {
+        "cell::components::Wall": (),
+        "bevy_transform::components::transform::Transform": (
+          translation: (
+            x: 240.0,
+            y: 0.0,
+            z: 1.0,
+          ),
+          rotation: (0.0, 0.0, 0.0, 1.0),
+          scale: (
+            x: 20.0,
+            y: 500.0,
+            z: 1.0,
+          ),
+        ),
+        "bevy_asset::handle::Handle<bevy_render::texture::image::Image>": (
+          id: Id("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f", 13148262314052771789),
+        ),
+      },
+    ),
+    3: (
+      components: {
+        "cell::components::Wall": (),
+        "bevy_transform::components::transform::Transform": (
+          translation: (
+            x: 0.0,
+            y: -240.0,
+            z: 1.0,
+          ),
+          rotation: (0.0, 0.0, 0.0, 1.0),
+          scale: (
+            x: 500.0,
+            y: 20.0,
+            z: 1.0,
+          ),
+        ),
+        "bevy_asset::handle::Handle<bevy_render::texture::image::Image>": (
+          id: Id("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f", 13148262314052771789),
+        ),
+      },
+    ),
+    4: (
+      components: {
+        "cell::components::Wall": (),
+        "bevy_transform::components::transform::Transform": (
+          translation: (
+            x: -240.0,
+            y: 0.0,
+            z: 1.0,
+          ),
+          rotation: (0.0, 0.0, 0.0, 1.0),
+          scale: (
+            x: 20.0,
+            y: 500.0,
+            z: 1.0,
+          ),
+        ),
+        "bevy_asset::handle::Handle<bevy_render::texture::image::Image>": (
+          id: Id("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f", 13148262314052771789),
+        ),
+      },
+    ),
+    5: (
+      components: {
+        "cell::components::Direction": None,
+        "cell::components::Cell": (),
+        "cell::components::Player": (),
+        "cell::components::Lifespan": (1),
+        "bevy_transform::components::transform::Transform": (
+          translation: (
+            x: 103.79074,
+            y: -43.201935,
+            z: 1.0,
+          ),
+          rotation: (0.0, 0.0, 0.0, 1.0),
+          scale: (
+            x: 20.0,
+            y: 20.0,
+            z: 1.0,
+          ),
+        ),
+        "bevy_asset::handle::Handle<bevy_render::texture::image::Image>": (
+          id: Id("6ea26da6-6cf8-4ea2-9986-1d7bf6c17d6f", 13148262314052771789),
+        ),
+      },
+    ),
+  },
+)

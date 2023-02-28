@@ -56,14 +56,10 @@ fn spawn_wall(mut commands: Commands) {
     let bottom_translation = Vec3::new(0.0, -SCREEN_HEIGHT / 2.0 + (size / 2.0), 1.0);
     let left_translation = Vec3::new(-SCREEN_WIDTH / 2.0 + (size / 2.0), 0.0, 1.0);
     let right_translation = Vec3::new(SCREEN_WIDTH / 2.0 - (size / 2.0), 0.0, 1.0);
-    commands.spawn(get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, top_translation))
-        .insert(Wall);
-    commands.spawn(get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, bottom_translation))
-        .insert(Wall);
-    commands.spawn(get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, left_translation))
-        .insert(Wall);
-    commands.spawn(get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, right_translation))
-        .insert(Wall);
+    commands.spawn((get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, top_translation), Wall));
+    commands.spawn((get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, bottom_translation), Wall));
+    commands.spawn((get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, left_translation), Wall));
+    commands.spawn((get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, right_translation), Wall));
 }
 
 fn spawn_cell(
@@ -72,16 +68,20 @@ fn spawn_cell(
     cell_query: Query<&Transform, (With<Cell>, Without<Wall>)>,
 ) {
     let translation = get_random_translation(&wall_query, &cell_query);
-    commands.spawn(get_rectangle(Color::ORANGE_RED, CELL_SIZE, CELL_SIZE, translation))
-        .insert(Lifespan(1))
-        .insert(Direction::None)
-        .insert(Cell)
-        .insert(Player);
+    commands.spawn((
+        get_rectangle(Color::ORANGE_RED, CELL_SIZE, CELL_SIZE, translation),
+        Lifespan(1),
+        Direction::None,
+        Cell,
+        Player,
+    ));
     let translation = get_random_translation(&wall_query, &cell_query);
-    commands.spawn(get_rectangle(Color::FUCHSIA, CELL_SIZE, CELL_SIZE, translation))
-        .insert(Lifespan(1))
-        .insert(Cell)
-        .insert(Enemy(Timer::from_seconds(2.0, TimerMode::Repeating)));
+    commands.spawn((
+        get_rectangle(Color::FUCHSIA, CELL_SIZE, CELL_SIZE, translation),
+        Lifespan(1),
+        Cell,
+        Enemy(Timer::from_seconds(2.0, TimerMode::Repeating)),
+    ));
 }
 
 fn spawn_virus(mut commands: Commands, mut reader: EventReader<DropVirusEvent>) {
