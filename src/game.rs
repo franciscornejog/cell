@@ -6,7 +6,7 @@ use crate::components::{
     MainCamera, 
     Cell, Player, Enemy, 
     Hostile, Lifespan,
-    Velocity,
+    Velocity, StatusEffect,
     Explosion, Virus, 
     Particle, Wall
 };
@@ -30,6 +30,7 @@ impl Plugin for GamePlugin {
         .add_event::<ExplodeEvent>()
         .add_system_set(SystemSet::on_enter(AppState::Game)
             .with_system(spawn_cell)
+            .with_system(spawn_status_effect)
             .with_system(spawn_wall))
         .add_system_set(SystemSet::on_update(AppState::Game)
             .with_system(input_player)
@@ -44,6 +45,7 @@ impl Plugin for GamePlugin {
             .with_system(despawn_virus)
             .with_system(despawn_explosion) 
             .with_system(despawn_lifespan) 
+            .with_system(collide_status_effect) 
             .with_system(collide_hostile))
         .add_system_set(SystemSet::on_exit(AppState::Game)
             .with_system(despawn_screen::<Wall>)
@@ -60,10 +62,19 @@ fn spawn_wall(mut commands: Commands) {
     let bottom_translation = Vec3::new(0.0, -SCREEN_HEIGHT / 2.0 + (size / 2.0), 1.0);
     let left_translation = Vec3::new(-SCREEN_WIDTH / 2.0 + (size / 2.0), 0.0, 1.0);
     let right_translation = Vec3::new(SCREEN_WIDTH / 2.0 - (size / 2.0), 0.0, 1.0);
-    commands.spawn((get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, top_translation), Wall));
-    commands.spawn((get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, bottom_translation), Wall));
-    commands.spawn((get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, left_translation), Wall));
-    commands.spawn((get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, right_translation), Wall));
+    commands.spawn_batch(vec![
+        (get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, top_translation), Wall),
+        (get_rectangle(Color::DARK_GRAY, SCREEN_WIDTH, size, bottom_translation), Wall),
+        (get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, left_translation), Wall),
+        (get_rectangle(Color::DARK_GRAY, size, SCREEN_HEIGHT, right_translation), Wall),
+    ]);
+}
+
+fn spawn_status_effect(mut commands: Commands) {
+    commands.spawn((
+        get_rectangle(Color::GREEN, 10.0, 10.0, Vec3::Z),
+        StatusEffect::Speed,
+    ));
 }
 
 fn spawn_cell(
@@ -92,7 +103,7 @@ fn spawn_virus(mut commands: Commands, mut reader: EventReader<DropVirusEvent>) 
     if let Some(reader) = reader.iter().next() {
         let size = CELL_SIZE / 2.0;
         commands.spawn((
-            get_rectangle(Color::YELLOW_GREEN, size, size, reader.translation),
+            get_rectangle(Color::YELLOW, size, size, reader.translation),
             Virus(Timer::from_seconds(5.0, TimerMode::Once)),
         ));
     }
@@ -214,10 +225,9 @@ fn move_player(
     wall_query: Query<&Transform, (With<Wall>, Without<Player>)>,
     mut player_query: Query<(&mut Transform, &Velocity), (With<Player>, Changed<Velocity>)>,
 ) {
-    let initial_velocity = 60.0;
     let (mut transform, velocity) = player_query.single_mut();
     let mut new_transform = transform.clone();
-    new_transform.translation += velocity.0.normalize() * time.delta_seconds() * initial_velocity;
+    new_transform.translation += velocity.0 * time.delta_seconds();
     let has_not_collided = !wall_query.iter()
         .any(|wall_transform| has_collided(&new_transform, wall_transform));
     if has_not_collided {
@@ -225,19 +235,27 @@ fn move_player(
     }
 }
 
-fn input_player(key: Res<Input<KeyCode>>, mut query: Query<&mut Velocity, With<Player>>) {
-    let mut velocity = query.single_mut();
+fn input_player(
+    key: Res<Input<KeyCode>>, 
+    mut query: Query<(&mut Velocity, Option<&StatusEffect>), With<Player>>,
+) {
+    let (mut velocity, status_effect) = query.single_mut();
+    let default_speed = if let Some(StatusEffect::Speed) = status_effect {
+        150.0
+    } else {
+        60.0
+    };
     if key.pressed(KeyCode::A) {
-        velocity.0.x = -1.0;
+        velocity.0.x = -default_speed;
     }
     if key.pressed(KeyCode::D) {
-        velocity.0.x = 1.0;
+        velocity.0.x = default_speed;
     } 
     if key.pressed(KeyCode::W) {
-        velocity.0.y = 1.0;
+        velocity.0.y = default_speed;
     } 
     if key.pressed(KeyCode::S) {
-        velocity.0.y = -1.0;
+        velocity.0.y = -default_speed;
     }
     if !key.any_pressed([KeyCode::A, KeyCode::D, KeyCode::W, KeyCode::S]) {
         velocity.0.x = 0.0;
@@ -336,6 +354,21 @@ fn despawn_explosion(
             commands.entity(entity).despawn();
         }
     } 
+}
+
+fn collide_status_effect(
+    mut commands: Commands,
+    status_effect_query: Query<(Entity, &Transform, &StatusEffect)>,
+    mut cell_query: Query<(Entity, &Transform), (With<Cell>, Without<StatusEffect>)>,
+) {
+    for (status_effect_entity, status_effect_transform, status_effect) in status_effect_query.iter() {
+        for (cell_entity, cell_transform) in cell_query.iter_mut() {
+            if has_collided(status_effect_transform, cell_transform) {
+                commands.entity(cell_entity).insert(status_effect.clone());
+                commands.entity(status_effect_entity).despawn_recursive();
+            }
+        }
+    }
 }
 
 fn collide_hostile(

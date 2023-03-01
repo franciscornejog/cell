@@ -32,3 +32,8 @@ pub struct Particle;
 
 #[derive(Component)]
 pub struct Velocity(pub Vec3);
+
+#[derive(Component, Clone)]
+pub enum StatusEffect {
+    Speed,
+}
