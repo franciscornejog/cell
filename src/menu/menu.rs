@@ -1,11 +1,12 @@
 use bevy::prelude::*;
 use crate::AppState;
 use crate::game::GameMessage;
-use crate::ui::{
+use crate::util::despawn_screen;
+use super::ui::{
     get_button_bundle,
     get_text_bundle,
     get_node_bundle,
-    despawn_screen};
+};
 
 pub struct MenuPlugin;
 

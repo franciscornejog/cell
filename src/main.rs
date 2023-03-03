@@ -7,16 +7,15 @@ const SCREEN_WIDTH: f32 = 500.0;
 
 mod components;
 mod events;
-mod ui;
-mod game;
-mod splash;
 mod menu;
+mod game;
+mod util;
 mod scene;
 
 use components::MainCamera;
-use splash::SplashPlugin;
+use menu::splash::SplashPlugin;
+use menu::menu::MenuPlugin;
 use game::GamePlugin;
-use menu::MenuPlugin;
 // use scene::ScenePlugin;
 
 #[derive(Clone, Eq, PartialEq, Debug, Hash)]

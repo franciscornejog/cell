@@ -11,7 +11,7 @@ use crate::components::{
     Particle, Wall
 };
 use crate::events::{DropVirusEvent, EjectEvent, ExplodeEvent};
-use crate::ui::despawn_screen;
+use crate::util::despawn_screen;
 use rand::prelude::random;
 
 const CELL_SIZE: f32 = 20.0;
