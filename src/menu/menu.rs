@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::{app::AppExit, prelude::*};
 use crate::AppState;
 use crate::events::MenuEvent;
 use crate::util::despawn_screen;
@@ -16,7 +16,9 @@ impl Plugin for MenuPlugin {
         .add_system_set(SystemSet::on_enter(AppState::Menu)
             .with_system(spawn_screen))
         .add_system_set(SystemSet::on_update(AppState::Menu)
-            .with_system(interact_button))
+            .with_system(interact_button)
+            .with_system(play)
+            .with_system(exit_app))
         .add_system_set(SystemSet::on_exit(AppState::Menu)
             .with_system(despawn_screen::<Menu>));
     }
@@ -75,20 +77,43 @@ fn spawn_level_menu(
         });
 }
 
-fn interact_button(
+fn exit_app(
+    query: Query<(&Interaction, &Children), Changed<Interaction>>,
+    text_query: Query<&Text>,
+    mut event: EventWriter<AppExit>
+) {
+    for (interaction, children) in &query {
+        let text = text_query.get(children[0]).unwrap();
+        if *interaction == Interaction::Clicked {
+            if text.sections[0].value == "Quit" {
+                event.send(AppExit);
+            }
+        }
+    }
+}
+
+fn play(
     mut state: ResMut<State<AppState>>,
-    mut query: Query<(&Interaction, &mut BackgroundColor, &Children), 
-        (Changed<Interaction>, With<Button>)>,
+    query: Query<(&Interaction, &Children), Changed<Interaction>>,
     text_query: Query<&Text>,
 ) {
-    for (interaction, mut color, children) in &mut query {
+    for (interaction, children) in &query {
         let text = text_query.get(children[0]).unwrap();
-        let mut next_state = AppState::Game;
-        if text.sections[0].value == "Quit" {
-            next_state = AppState::Splash;
+        if *interaction == Interaction::Clicked {
+            if text.sections[0].value != "Quit" {
+                state.set(AppState::Game).unwrap();
+            }
         }
+    }
+}
+
+fn interact_button(
+    mut query: Query<(&Interaction, &mut BackgroundColor), 
+        (Changed<Interaction>, With<Button>)>,
+) {
+    for (interaction, mut color) in &mut query {
         match *interaction {
-            Interaction::Clicked => { state.set(next_state).unwrap(); }
+            Interaction::Clicked => { *color = Color::GREEN.into() }
             Interaction::Hovered => { *color = Color::ORANGE_RED.into(); }
             Interaction::None => { *color = Color::DARK_GRAY.into(); }
         }

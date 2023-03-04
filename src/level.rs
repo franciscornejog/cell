@@ -62,6 +62,10 @@ pub const LEVELS: [&str; 2] = [
 ];
 
 pub fn generate_level(mut commands: Commands, mut level: ResMut<Level>) {
+    if level.0.checked_sub(1).is_none() {
+        level.0 = LEVELS.len();
+    }
+    level.0 -= 1;
     for (i, c) in LEVELS[LEVELS.len() - 1 - level.0].chars().filter(|c| *c != '\n').enumerate() {
         let col = (i % COL_SIZE) as f32;
         let row = (i / ROW_SIZE) as f32;
@@ -93,9 +97,6 @@ pub fn generate_level(mut commands: Commands, mut level: ResMut<Level>) {
             ));
         }
     }
-    if level.0.checked_sub(1).is_none() {
-        level.0 = LEVELS.len() - 1;
-    }
 }
 
 fn get_tile(color: Color, size: f32, translation: Vec3) -> SpriteBundle {
@@ -108,32 +109,6 @@ fn get_tile(color: Color, size: f32, translation: Vec3) -> SpriteBundle {
             ..default()
         },
         transform: Transform::from_scale(Vec3::new(size, size, 0.0))
-            .with_translation(translation),
-        ..default()
-    }
-}
-
-fn get_rectangle(
-    color: Color, 
-    height: f32, 
-    width: f32, 
-    translation: Vec3,
-    side: f32,
-) -> SpriteBundle {
-    let mut x = translation.x * TILE_SIZE - SCREEN_WIDTH / 2.0 + width / 2.0;
-    let mut y = translation.y * -TILE_SIZE + SCREEN_HEIGHT / 2.0 - height / 2.0;
-    if width == TILE_SIZE {
-        y -= side;
-    } else {
-        x += side;
-    }
-    let translation = Vec3::new(x, y, 0.0);
-    SpriteBundle {
-        sprite: Sprite {
-            color,
-            ..default()
-        },
-        transform: Transform::from_scale(Vec3::new(width, height, 0.0))
             .with_translation(translation),
         ..default()
     }

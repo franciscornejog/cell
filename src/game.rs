@@ -19,7 +19,7 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app
         .insert_resource(GameMessage("Paused".to_string()))
-        .insert_resource(Level(1))
+        .insert_resource(Level(2))
         .add_event::<MenuEvent>()
         .add_event::<DropVirusEvent>()
         .add_event::<EjectEvent>()
@@ -249,13 +249,13 @@ fn despawn_lifespan(
     for (entity, lifespan, player, enemy) in query.iter() {
         if lifespan.0 <= 0 {
             if player.is_some() {
+                level.0 = 0;
                 writer.send(MenuEvent("Game Over".to_string()));
                 state.set(AppState::Menu).unwrap(); 
             } else if enemy.is_some() {
-                if level.0.checked_sub(1).is_none() {
+                if level.0 == 0 {
                     writer.send(MenuEvent("Victory".to_string()));
                 } else {
-                    level.0 -= 1;
                     writer.send(MenuEvent("Next Level".to_string()));
                 }
                 state.set(AppState::Menu).unwrap(); 
