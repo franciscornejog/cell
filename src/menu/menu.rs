@@ -1,6 +1,6 @@
 use bevy::prelude::*;
 use crate::AppState;
-use crate::game::GameMessage;
+use crate::events::MenuEvent;
 use crate::util::despawn_screen;
 use super::ui::{
     get_button_bundle,
@@ -26,16 +26,47 @@ impl Plugin for MenuPlugin {
 struct Menu;
 
 fn spawn_screen(
-    mut commands: Commands, 
-    message: Res<GameMessage>,
+    commands: Commands, 
+    mut reader: EventReader<MenuEvent>,
     asset_server: Res<AssetServer>
+) {
+    if let Some(event) = reader.iter().next() {
+        match event.0.as_str() {
+            "Next Level" => spawn_level_menu(commands, asset_server, &event.0),
+            _ => spawn_exit_menu(commands, asset_server, &event.0),
+        }
+    }
+}
+
+fn spawn_exit_menu(
+    mut commands: Commands, 
+    asset_server: Res<AssetServer>,
+    message: &str,
 ) {
     commands.spawn((get_node_bundle(), Menu))
         .with_children(|parent| {
-            parent.spawn(get_text_bundle(Color::WHITE, 60.0, &message.0, &asset_server));
+            parent.spawn(get_text_bundle(Color::WHITE, 60.0, message, &asset_server));
             parent.spawn(get_button_bundle(Color::DARK_GRAY))
                 .with_children(|parent| {
                 parent.spawn(get_text_bundle(Color::WHITE, 40.0, "Play Again", &asset_server));
+            });
+            parent.spawn(get_button_bundle(Color::DARK_GRAY))
+                .with_children(|parent| {
+                parent.spawn(get_text_bundle(Color::WHITE, 40.0, "Quit", &asset_server));
+            });
+        });
+}
+
+fn spawn_level_menu(
+    mut commands: Commands, 
+    asset_server: Res<AssetServer>,
+    message: &str,
+) {
+    commands.spawn((get_node_bundle(), Menu))
+        .with_children(|parent| {
+            parent.spawn(get_button_bundle(Color::DARK_GRAY))
+                .with_children(|parent| {
+                parent.spawn(get_text_bundle(Color::WHITE, 40.0, message, &asset_server));
             });
             parent.spawn(get_button_bundle(Color::DARK_GRAY))
                 .with_children(|parent| {

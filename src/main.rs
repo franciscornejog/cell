@@ -5,16 +5,18 @@ use bevy::{
 const SCREEN_HEIGHT: f32 = 500.0;
 const SCREEN_WIDTH: f32 = 500.0;
 
+mod menu;
+
+mod game;
 mod components;
 mod events;
-mod menu;
-mod game;
+mod level;
+
 mod util;
+
 mod scene;
 
-use components::MainCamera;
-use menu::splash::SplashPlugin;
-use menu::menu::MenuPlugin;
+use menu::{menu::MenuPlugin, splash::SplashPlugin};
 use game::GamePlugin;
 // use scene::ScenePlugin;
 
@@ -37,16 +39,11 @@ fn main() {
             ..default()
         }))
         .insert_resource(ClearColor(Color::BLACK))
-        .add_startup_system(spawn_camera)
         .add_state(AppState::Splash)
         .add_plugin(SplashPlugin)
-        // .add_plugin(ScenePlugin)
         .add_plugin(GamePlugin)
         .add_plugin(MenuPlugin)
+        // .add_plugin(ScenePlugin)
         .add_system(close_on_esc)
         .run();
-}
-
-fn spawn_camera(mut commands: Commands) {
-    commands.spawn((Camera2dBundle::default(), MainCamera));
 }
