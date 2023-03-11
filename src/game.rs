@@ -19,7 +19,7 @@ impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app
         .insert_resource(Score(0))
-        .insert_resource(Level(2))
+        .insert_resource(Level(3))
         .add_event::<MenuEvent>()
         .add_event::<DropVirusEvent>()
         .add_event::<EjectEvent>()
