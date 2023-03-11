@@ -13,12 +13,12 @@ const CELL_SIZE: f32 = 20.0;
 pub struct GamePlugin;
 
 #[derive(Resource)]
-pub struct GameMessage(pub String);
+pub struct Score(pub u32);
 
 impl Plugin for GamePlugin {
     fn build(&self, app: &mut App) {
         app
-        .insert_resource(GameMessage("Paused".to_string()))
+        .insert_resource(Score(0))
         .insert_resource(Level(2))
         .add_event::<MenuEvent>()
         .add_event::<DropVirusEvent>()
@@ -26,6 +26,16 @@ impl Plugin for GamePlugin {
         .add_event::<ExplodeEvent>()
         .add_startup_system(spawn_camera)
         .add_system_set(SystemSet::on_enter(AppState::Game)
+            .with_system(reset_score)
+            .with_system(generate_level))
+        .add_system_set(SystemSet::on_pause(AppState::Game)
+            .with_system(despawn_screen::<Wall>)
+            .with_system(despawn_screen::<Cell>)
+            .with_system(despawn_screen::<Particle>)
+            .with_system(despawn_screen::<Virus>)
+            .with_system(despawn_screen::<StatusEffect>)
+            .with_system(despawn_screen::<Explosion>))
+        .add_system_set(SystemSet::on_resume(AppState::Game)
             .with_system(generate_level))
         .add_system_set(SystemSet::on_update(AppState::Game)
             .with_system(input_player)
@@ -52,6 +62,10 @@ impl Plugin for GamePlugin {
             .with_system(despawn_screen::<StatusEffect>)
             .with_system(despawn_screen::<Explosion>));
     }
+}
+
+fn reset_score(mut score: ResMut<Score>) {
+    score.0 = 0;
 }
 
 fn spawn_camera(mut commands: Commands) {
@@ -243,6 +257,7 @@ fn despawn_lifespan(
     mut commands: Commands,
     mut state: ResMut<State<AppState>>,
     mut level: ResMut<Level>,
+    mut score: ResMut<Score>,
     query: Query<(Entity, &Lifespan, Option<&Player>, Option<&Enemy>)>,
     mut writer: EventWriter<MenuEvent>,
 ) {
@@ -253,12 +268,13 @@ fn despawn_lifespan(
                 writer.send(MenuEvent("Game Over".to_string()));
                 state.set(AppState::Menu).unwrap(); 
             } else if enemy.is_some() {
+                score.0 += 1;
                 if level.0 == 0 {
                     writer.send(MenuEvent("Victory".to_string()));
                 } else {
                     writer.send(MenuEvent("Next Level".to_string()));
                 }
-                state.set(AppState::Menu).unwrap(); 
+                state.push(AppState::Menu).unwrap(); 
             }
             commands.entity(entity).despawn();
         }
